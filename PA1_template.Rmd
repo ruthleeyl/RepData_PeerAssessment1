@@ -1,25 +1,170 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
+title: "Reproducible Research Assignment 1"
+author: "Ruth"
+date: "January 19, 2018"
 output: 
-  html_document:
-    keep_md: true
+  html_document: 
+    keep_md: yes
+keep_md: true
 ---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
 
-## Loading and preprocessing the data
-
-
-
-## What is mean total number of steps taken per day?
-
+## Reading the Data
 
 
-## What is the average daily activity pattern?
+```{r read}
+getwd()
+setwd(dir = "/Users/Prisuser.PRIS-LT000120/Documents/Coursera")
+library(tidyr)
+library(plyr)
+library(dplyr)
+library(ggplot2)
 
 
+data=read.csv("activity.csv", header=TRUE)
 
-## Imputing missing values
+```
+## Exploring Data on the Total Number of Steps Taken Daily
+
+1) Total number of steps taken per day is as shown below:
+
+```{r Q1}
+df<-aggregate(data$steps, by=list(date=data$date),FUN=sum, na.rm=TRUE)
+names(df)<-c("Date(yyyy-mm-dd)","Number_of_Steps_Taken")
+df
+```
+
+2) Histogram of the Total Number of Steps Taken Daily
+
+```{r histogram, echo=TRUE}
+g<-ggplot(data=df,aes(Number_of_Steps_Taken))+
+  geom_histogram(col="black",aes(fill=..count..),binwidth = 2500)+
+  scale_fill_gradient("Count",low="red",high="green")+
+  labs(title="Histogram for Total Number of Steps Taken Daily")
+
+print(g)
+```
+
+3a) Mean number of steps taken daily
+
+```{r mean}
+mean(df$Number_of_Steps_Taken)
+```
+
+3b) Median number of steps taken daily
+
+```{r median}
+median(df$Number_of_Steps_Taken)
+```
+## Looking at Average Daily Activity Pattern
+
+```{r time_Series}
+
+ds<-aggregate(data$steps,by=list(interval=data$interval),FUN=mean, na.rm=TRUE)
+
+plot(ds[,1],ds[,2],type="l",main="Time Series Plot of 5-Minute Intervals, 1 Oct 2012 to 30 Nov 2012",xlab="5-minute Intervals (from 0 to 2355 in a day)",ylab="Average Number of Steps Taken across 61 days" )
+```
 
 
+Finding interval with the Highest average number of steps taken:
+```{r highest}
+which.max(ds[,2])
+ds[104,1]
+ds[104,2]
+```
+Interval with the highest average number of steps of 206.1698 is:  **0835-0840 hrs**
 
-## Are there differences in activity patterns between weekdays and weekends?
+## Imputing Missing Values
+1)Total number of rows with NAs is:
+```{r count_NA}
+sum(!complete.cases(data))
+```
+
+2) Imputing missing values with the **mean of the 5-minute interval across all the 61 days** and
+3) Creating a newdataset "newdata" equal to the original dataset "data" but with the missing data filled in
+```{r impute_missing}
+impute<-function(x,fun){
+  missing<-is.na(x)
+  replace(x,missing,fun(x[!missing]))
+}
+newdata<-ddply(data,~interval,transform,steps=impute(steps,mean))
+newdata<-arrange(newdata,date)
+
+```
+4) Histogram of the Total Number of Steps Taken Daily for the New Dataset (with imputed missing values)
+
+```{r histogram_New,echo=TRUE}
+dfnew<-aggregate(newdata$steps, by=list(date=newdata$date),FUN=sum, na.rm=TRUE)
+
+g<-ggplot(data=dfnew,aes(x))+
+  geom_histogram(col="black",aes(fill=..count..),binwidth = 2500)+
+  scale_fill_gradient("Count",low="red",high="green")+
+  labs(title="Histogram for Total Number of Steps Taken Daily for New Dataset",x="Number of Steps Taken")
+
+print(g)
+```
+
+
+4a) Mean number of steps taken daily for new dataset
+
+```{r meannew}
+mean(dfnew$x)
+```
+
+4b) Median number of steps taken daily for new dataset
+
+```{r mediannew}
+median(dfnew$x)
+```
+The mean and median estimates for the new dataset differ from the initial estimates.
+
+By imputing the missing values for each interval with the average across the 61 days, the mean is now moved close/equal to the median for the new dataset.
+
+## Comparing Activity Patterns: Weekdays vs Weekends
+```{r panel_plot}
+newdata1<-newdata
+newdata1$date<-as.Date(newdata1$date)
+newdata1$week<-ifelse(weekdays(newdata1$date) %in% c("Saturday","Sunday"),"weekend","weekday")
+
+wkday<- filter(newdata1, week=="weekday")
+wkend<- filter(newdata1, week=="weekend")
+
+
+dsend<-aggregate(wkend$steps,by=list(interval=wkend$interval),FUN=mean, na.rm=TRUE)
+dsday<-aggregate(wkday$steps,by=list(interval=wkday$interval),FUN=mean, na.rm=TRUE)
+
+dsday$week=rep("weekday",288)
+dsend$week=rep("weekend",288)
+
+combined<-rbind(dsday,dsend)
+
+g<-ggplot(combined,aes(interval,x))+
+  geom_line()+
+  facet_grid(week~.)+
+  labs(title="Panel Plot: Weekdays vs Weekends, 1 Oct 2012 to 11 Nov 2012")+
+  labs(y="Average Number of Steps")+
+  labs(x="5-Minute Intervals")
+print(g)
+```
+
+**Alternatives** making a panel plot using **base plotting system**:
+```{r base, echo=TRUE}
+par(mfrow=c(2,1),mar=c(4,4,2,1))
+
+plot(dsend[,1],dsend[,2],type="l",main="Time Series Plot of 5-Minute Intervals (Weekends)",xlab=" ",ylab=" " )
+plot(dsday[,1],dsday[,2],type="l",main="Time Series Plot of 5-Minute Intervals (Weekdays)",xlab="5-minute Intervals (from 0 to 2355 on Weekdays)",ylab=" " )
+```
+
+and **lattice plotting system**:
+
+
+```{r lattice, echo=TRUE}
+library(lattice)
+xyplot(x~interval|week,data=combined,type="l", ylab = "Average Number of Steps",layout=c(1,2))
+
+```
+
+From the panel time series plots, there are differences in the activity patterns between weekdays and weekends. The weekends see more intervals with high number of steps (from late mornings onwards) than on weekdays. For weekdays, only the mornings see high number of steps, with the rest of the day depicting a sedentary lifestyle.
